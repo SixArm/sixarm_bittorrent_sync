@@ -1,0 +1,142 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides: btsync
+# Required-Start: $local_fs $remote_fs
+# Required-Stop: $local_fs $remote_fs
+# Should-Start: $network
+# Should-Stop: $network
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Multi-user daemonized version of btsync.
+# Description: Starts the btsync daemon for all registered users.
+### END INIT INFO
+
+###
+#
+# This script is based on:
+# https://gist.github.com/MendelGusmao/5398362
+#
+# We adjusted the script: we created fine-grained functions.
+# Our goal with this is to enable more ways of detecting which
+# users want to launch btsync, and also more ways of detecting
+# each user's configuration file, especially on Linux and OSX.
+#
+###
+
+APP_NAME="BitTorrent Sync"
+DAEMON=/usr/bin/btsync
+
+# Get a list of users who want to run clients.
+#
+# Example:
+#
+#    get_user_list
+#    #=> "alice bob carol"
+#
+# You may want to change this implementation to be more sophisticated,
+# such as searching all users to find the presence of a conf file.
+#
+get_user_list() {
+  echo "joel sixarm"
+}
+
+# Get a user's home directory path.
+#
+# Example:
+#
+#     get_home_dir_path "alice"
+#     #=> "/home/alice"
+#
+# You may want to change this implementation to fit your system,
+# such as calling a directory server, or a shadow file, etc.
+#
+get_home_dir_path() {
+  _user=$1
+  _home_dir_path=`getent passwd $_user | cut -d: -f6`
+  echo "$_home_dir_path"
+}
+
+# Get a user's configuration file path.
+#
+# Example:
+#
+#     get_conf_file_path "alice"
+#     #=> "/home/alice/.bittorrent/bittorrent-sync-conf.json"
+#
+# You may want to change this implementation for your setup,
+# such as searching a user's directory to find the conf file.
+#
+get_conf_file_path() {
+  _user=$1
+  _home_dir_path=$(get_home_dir_path $_user)
+  _conf_file_path="$_home_dir_path/.bittorrent/bittorrent-sync-conf.json"
+  echo "$_conf_file_path"
+}
+
+# Get the PID for the user daemon
+#
+# Example:
+#
+#     get_pid "alice" "btsync"
+#     #=> 10000
+#
+get_pid() {
+  _user=$1
+  _daemon=$2
+  _pid=`pgrep -fu $_user $_daemon`
+  echo "$pid"
+}
+
+start() {
+  for user in $(get_user_list); do
+    conf_file_path=$(get_conf_file_path $user)
+    if [ -f $conf_file_path ]; then
+      echo "Starting $APP_NAME for $user"
+      start-stop-daemon -b -o -c $user -S -u $user -x $DAEMON -- --config $conf_file_path
+    else
+      echo "Couldn't start $APP_NAME for $user (no conf file found: $conf_file_path)"
+    fi
+  done
+}
+
+stop() {
+  for user in $(get_user_list); do
+    dbpid=$(get_pid $user $DAEMON)
+    if [ ! -z "$dbpid" ]; then
+      echo "Stopping $APP_NAME for $user"
+      start-stop-daemon -o -c $user -K -u $user -x $DAEMON
+    fi
+  done
+}
+
+status() {
+  for user in $(get_user_list); do
+    dbpid=$(get_pid $user $DAEMON)
+    if [ -z "$dbpid" ]; then
+      echo "$APP_NAME for user $user: not running."
+    else
+      echo "$APP_NAME for user $user: running (pid $dbpid)"
+    fi
+  done
+}
+
+case "$1" in
+ start)
+start
+;;
+stop)
+stop
+;;
+restart|reload|force-reload)
+stop
+start
+;;
+status)
+status
+;;
+*)
+echo "Usage: /etc/init.d/btsync {start|stop|reload|force-reload|restart|status}"
+exit 1
+esac
+
+exit 0
