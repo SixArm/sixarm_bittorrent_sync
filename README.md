@@ -1,4 +1,4 @@
-# SixArm.com » BitTorrent Sync » <br> Daemon for running btsync
+# BitTorrent Sync » <br> Daemon for running btsync
 
 We run BitTorrent Sync on our servers. We have multiple users.
 
